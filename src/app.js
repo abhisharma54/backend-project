@@ -21,4 +21,12 @@ app.use(express.static("public")) // The express.static() function is a built-in
 // * It is also useful in storing the user’s sessions
 app.use(cookiesParser())
 
+// routes 
+import userRouter from './routes/user.routes.js'
+
+// routes declaration
+app.use("/api/v1/users", userRouter)
+
+// http://localhost:8000/api/v1/users/register
+
 export { app } 
