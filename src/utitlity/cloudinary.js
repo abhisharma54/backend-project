@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from "cloudinary";
-import fs from 'fs' // file System in node
-
+import fs from 'fs' // file System in node.js
+// The fs module in Node.js provides an interface for working with the file system.
+// fs allows you to perform various operations such as reading from and writing to files, manipulating directories, and handling file permissions.
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
