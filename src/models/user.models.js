@@ -47,9 +47,11 @@ const userSchema = new Schema(
     },
     {timestamps: true}
 );
+// console.log("userSchema", userSchema);
 
+// Pre middleware functions are executed one after another, when each middleware calls next.
 userSchema.pre("save", async function(next) {
-    if(this.isModified("password")) return next()
+    if(this.isModified("password")) return next();
 
     this.password = await bcrypt.hash(this.password, 10)
     next()
@@ -74,7 +76,7 @@ userSchema.methods.generateAccessToken = function() {
     )
 }
 
-userSchema.methods.refreshAccessToken = function() {
+userSchema.methods.generateRefreshToken = function() {
     return jwt.sign(
         {
             _id: this._id,
