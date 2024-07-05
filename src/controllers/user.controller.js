@@ -4,6 +4,7 @@ import { User } from '../models/user.models.js'
 import { uploadOnCloudinary } from '../utitlity/cloudinary.js'
 import { ApiResponse } from '../utitlity/apiResponse.js'
 import jwt from "jsonwebtoken"
+import mongoose from 'mongoose'
 
 const generateAccessAndRefreshTokens = async(userId) => {
     try {
@@ -235,6 +236,7 @@ const refreshAccessToken = asyncHandler( async(req, res) => {
     }
 })
 
+// change current password
 const changeCurrentPassword = asyncHandler( async(req, res) => {
     const {oldPassword, newPassword} = req.body
 
@@ -254,12 +256,14 @@ const changeCurrentPassword = asyncHandler( async(req, res) => {
     .json(new ApiResponse(200, {}, "Password changed Successfully"))
 })
 
+// get current user
 const getCurrentUser = asyncHandler( async(req, res) => {
     return res
     .status(200)
     .json(new ApiResponse(200, req.user, "Current User Fetched Successfully"))
 })
 
+// updatae accout details like fullName, email
 const updateAccountDetails = asyncHandler( async(req, res) => {
     const {fullName, email} = req.body
 
@@ -283,6 +287,7 @@ const updateAccountDetails = asyncHandler( async(req, res) => {
     .json(new ApiResponse(200, user, "Account Details Updated Successfully" ))
 })
 
+// update avatar image
 const updateUserAvatar = asyncHandler( async(req, res) => {
     const avatarLocalPath = req.file?.path;
 
@@ -296,7 +301,7 @@ const updateUserAvatar = asyncHandler( async(req, res) => {
         throw new ApiError(400, "Error while uploading avatar!")
     }
 
-    await User.findByIdAndUpdate(
+    const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
             $set: {
@@ -306,12 +311,14 @@ const updateUserAvatar = asyncHandler( async(req, res) => {
         {new: true}
     ).select("-password")
 
+
     return res
     .status(200)
     .json(new ApiResponse(200, user, "Avatar Updated Successfully"))
 
 })
 
+// update coverImage 
 const updateUserCoverImage = asyncHandler( async(req, res) => {
     const coverImageLocalPath = req.file?.path;
 
@@ -341,6 +348,131 @@ const updateUserCoverImage = asyncHandler( async(req, res) => {
 
 })
 
+// get user channel profile 
+const getUserChannelProfile = asyncHandler( async(req, res) => {
+    const {username} = req.params
+
+    if(!username) {
+        throw new ApiError(400, "Username is missing!")
+    }
+
+    const channel = await User.aggregate([
+        {
+            // Filters the documents to pass only the documents that match the specified condition(s) to the next pipeline stage.
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        {
+            // $lookup is used to perform a left outer join between documents from two collections. It allows you to combine data from multiple collections into a single result set based on a matching condition.
+            $lookup: { // this lookup is for how many subscibers, subscribe a channel
+                from: "subscriptions", // Specifies the collection in the same database to perform the join with.
+                localField: "_id", //  The field from the input documents (current collection) to match documents from the 'from' collection.
+                foreignField: "channel", // The field from the 'from' collection to match documents with the 'localField'.
+                as: "subscribers" // Specifies the name of the new array field to add to the input documents. 
+            }
+        },
+        {
+            $lookup: { // this lookup is for how many channel we subscribed
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subcriber",
+                as: "subscribedTo"
+            }
+        },
+        {
+            //  $addFields stage is used to add new fields to documents(user.models.js) in the pipeline. Unlike $set, which modifies existing fields.
+            $addFields: {
+                subscribersCount: {
+                    $size: "$subscribers"
+                },
+                channelsSubscribedToCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: {
+                    // $cond: Evaluates a boolean expression to return one of the two specified return expressions.
+                    $cond: {
+                        if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            // $project is an essential stage that allows you to reshape documents.
+            // It can include, exclude, rename fields, compute new fields, and more. 
+            $project: {
+                fullName: 1, // 1 to include, 0 to exclude
+                username: 1,
+                subscribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1,
+            }
+        }
+    ])
+
+    if(!channel?.length) {
+        throw new ApiError(404, "Channel doesn't exists")
+    }
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, channel[0], "User channel fetch successfully"))
+})
+
+// get user watch history
+const getWatchHistory = asyncHandler( async(req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        fullName: 1,
+                                        username: 1,
+                                        avatar: 1,
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first: "$owner"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+ return res
+ .status(200)
+ .json(new ApiResponse(200, user[0].watchHistory, "Watch history fetched successfully"))
+})
+
 export {
      registerUser, 
      loginUser,
@@ -351,4 +483,6 @@ export {
      updateAccountDetails,
      updateUserAvatar,
      updateUserCoverImage,
+     getUserChannelProfile,
+     getWatchHistory,
 }
