@@ -132,8 +132,9 @@ const loginUser = asyncHandler( async(req, res) => {
     if(!user) {
         throw new ApiError(404, "User does not exist")
     }
+    console.log("Found user:", user);
 
-    const isPasswordValid = await user.password
+    const isPasswordValid = await user.isPasswordCorrect(password)
     // console.log("password" , isPasswordValid);
 
     if(!isPasswordValid) {
@@ -173,8 +174,10 @@ const logoutUser = asyncHandler( async(req, res) => {
     await User.findByIdAndUpdate(
         req.user._id, // req.user access is coming from verifyJWT(auth.middle.js) file which we're using in route for middleware
         {
-            $set: { // $set is mongodb operator is used to update field
-                refreshToken: undefined // update value by $set
+            // The $set operator replaces the value of a field with the specified value.
+            // The $unset operator deletes a particular field.
+            $unset: { 
+                refreshToken: 1 // this removes the field from document
             }
         },
         {
@@ -238,7 +241,7 @@ const refreshAccessToken = asyncHandler( async(req, res) => {
 
 // change current password
 const changeCurrentPassword = asyncHandler( async(req, res) => {
-    const {oldPassword, newPassword} = req.body
+    const { oldPassword, newPassword } = req.body
 
     const user = await User.findById(req.user?._id)
 
@@ -253,7 +256,7 @@ const changeCurrentPassword = asyncHandler( async(req, res) => {
 
     return res
     .status(200)
-    .json(new ApiResponse(200, {}, "Password changed Successfully"))
+    .json(new ApiResponse(200, {newPassword}, "Password changed Successfully"))
 })
 
 // get current user
